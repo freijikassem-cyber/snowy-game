@@ -2218,7 +2218,7 @@ function firebaseAdapter(database){
 }
 async function connectBackend(role){
  await initializeFirebase();while(backendOff.length)backendOff.pop()();
- if(role==='student'){if(!studentAuth.currentUser)await studentAuth.signInAnonymously();activeDatabase=studentApp.database();}
+ if(role==='student'){if(studentAuth.currentUser)await studentAuth.signOut();await studentAuth.signInAnonymously();activeDatabase=studentApp.database();}
  else{if(!teacherAuth.currentUser||teacherAuth.currentUser.isAnonymous)throw new Error('Sign in as a teacher first.');activeDatabase=teacherApp.database();}
  db=firebaseAdapter(activeDatabase);room=makeRoom(activeDatabase);
  const ref=activeDatabase.ref('.info/connected');const cb=s=>{document.getElementById('connection-status').textContent=s.val()?'':'Reconnecting…';};ref.on('value',cb);backendOff.push(()=>ref.off('value',cb));
