@@ -445,6 +445,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <div class="page" id="pl">
 <div style="font-family:var(--fd);font-size:17px;color:var(--muted)">GAME CODE</div>
 <div class="lcode" id="lcode">-----</div>
+<div id="lselfname" style="font-size:13px;font-weight:700;color:var(--ice);margin-bottom:4px"></div>
 <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px"><div class="pulse"></div>Waiting for teacher to start...</div>
 <div class="lplayers" id="lplayers"></div>
 </div>
@@ -788,6 +789,13 @@ async function initTeacher(){
   document.getElementById('tcode2').textContent=gameCode;
   renderQs();
   if(!db){toast('DB not available — check your connection.');return;}
+  // Wipe any stale data from a previous game that used this same code
+  try{
+    await activeDatabase.ref('sessions/'+gameCode+'/players').remove();
+    await activeDatabase.ref('sessions/'+gameCode+'/members').remove();
+    await activeDatabase.ref('sessions/'+gameCode+'/answers').remove();
+    await activeDatabase.ref('sessions/'+gameCode+'/events').remove();
+  }catch(e){}
   // Use games/CODE as the document (2 segments = valid doc path)
   await db.doc(`games/${gameCode}`).set({
     ownerId:teacherId,status:'lobby',timeLimit:300,createdAt:Date.now(),
@@ -1158,11 +1166,11 @@ async function joinGame(){
 
   const myClass=document.getElementById('jclass')?.value.trim()||'';
   gameCode=code;myName=name;me.myClass=myClass;
-  // Use a stable per-tab random PID (not tied to Firebase Auth UID which can collide)
-  const pidKey='snowy_pid_'+code;
-  myPid=sessionStorage.getItem(pidKey)||('p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
-  sessionStorage.setItem(pidKey,myPid);
-  console.log('[Snowy] joining as PID:',myPid,'code:',code);
+  // Always generate a fresh crypto-random PID — never reuse any cached value
+  const _pidArr=crypto.getRandomValues(new Uint8Array(12));
+  const _pidChars='abcdefghijklmnopqrstuvwxyz0123456789';
+  myPid='p'+Array.from(_pidArr,n=>_pidChars[n%36]).join('');
+  console.log('[Snowy] joining as PID:',myPid,'name:',name,'code:',code);
 
   let existing;
   try{await activeDatabase.ref('sessions/'+code+'/members/'+myPid).set(true);}catch(e){toast('Could not join: '+e.message,5000);joinBtn.disabled=false;joinBtn.textContent='Join Game';return;}
@@ -1181,28 +1189,39 @@ async function joinGame(){
       shieldCans:0,medPacks:0,knockouts:0,alive:true,
       myClass:myClass,xp:0,score:0,level:1,correctAnswers:0,wrongAnswers:0
     });
+    // Verify the write landed correctly
+    const check=await db.doc(`games/${code}/players/${myPid}`).get();
+    if(!check.exists||check.data().name!==myName){
+      throw new Error('Player record did not save correctly. Please try again.');
+    }
+    console.log('[Snowy] player record verified in DB for PID:',myPid);
   }catch(e){
     const errMsg=e?.message||e?.code||String(e)||'unknown';
-    console.error('Player create failed:',e);
+    console.error('[Snowy] Player create failed:',errMsg,e);
     const hint=errMsg.toLowerCase().includes('permiss')||errMsg.toLowerCase().includes('auth')||errMsg.toLowerCase().includes('unauthori')
       ?'Joining is not enabled on the server yet. Please ask your teacher.'
       :'Could not join — try refreshing the page. ('+errMsg.slice(0,60)+')';
-    toast(hint,4000);
+    toast(hint,5000);
     if(joinBtn){joinBtn.disabled=false;joinBtn.textContent='❄️ Join Game';}
     return;
   }
 
+  toast('✅ Joined as '+myName,2500);
   await watchPresence();showPage('pl');
   initStudentLobby();
 }
 
 function initStudentLobby(){
   document.getElementById('lcode').textContent=gameCode;
+  // Show the student their own confirmed name
+  const selfTag=document.getElementById('lselfname');
+  if(selfTag)selfTag.textContent='You joined as: '+myName;
   unsubs.push(db.collection(`games/${gameCode}/players`).onSnapshot(snap=>{
     players={};
     snap.docs.forEach(d=>{if(d.exists)players[d.id]=d.data();});
+    console.log('[Snowy] student lobby sees',snap.size,'player(s):',snap.docs.map(d=>d.data()?.name));
     const el=document.getElementById('lplayers');
-    if(el)el.innerHTML=Object.values(players).map(p=>`<div class="lchip"><div class="pdot" style="background:${safeColor(p.color)}"></div>${escapeHTML(p.name)}</div>`).join('');
+    if(el)el.innerHTML=Object.values(players).map(p=>`<div class="lchip"><div class="pdot" style="background:${safeColor(p.color)}"></div>${escapeHTML(p.name)}${p.id===myPid?' 👤':''}</div>`).join('');
     updateNavPlayers();
   }));
   // Watch game doc for status changes
