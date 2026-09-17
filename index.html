@@ -364,9 +364,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <div class="sc">
 <div class="stitle">🏠 Game Lobby</div>
 <div class="codebox" style="margin-bottom:14px"><div class="clbl">Code</div><div class="cval" id="tcode2">-----</div></div>
-<div style="font-size:14px;color:var(--muted);margin-bottom:10px">Players joined: <span id="pcount" style="color:var(--ice);font-weight:700">0</span></div>
+<div style="font-size:14px;color:var(--muted);margin-bottom:10px">Students joined: <span id="pcount" style="color:var(--ice);font-weight:700">0</span></div>
 <div class="plist" id="llist"></div>
-<div style="margin-top:16px"><button class="btn btn-gr btn-lg" disabled="" id="startbtn" onclick="startGame()" style="width:100%">▶ Start Game (0 players)</button></div>
+<div style="margin-top:16px"><button class="btn btn-gr btn-lg" disabled="" id="startbtn" onclick="startGame()" style="width:100%">▶ Start Game (0 students)</button></div>
 </div>
 </div>
 <!-- BANKS PANEL -->
@@ -1033,7 +1033,7 @@ function updateLobbyList(){
 function updateStartBtn(){
   const btn=document.getElementById('startbtn');
   const n=Object.keys(players).length;
-  if(btn){btn.disabled=n===0;btn.textContent=`▶ Start Game (${n} player${n!==1?'s':''})`;}}
+  if(btn){btn.disabled=n===0;btn.textContent=`▶ Start Game (${n} student${n!==1?'s':''})`;}}
 
 async function startGame(){
  if(!db)return;const minutes=Number(document.getElementById('ttimelimit').value),count=Number(document.getElementById('game-question-count').value);
@@ -2167,10 +2167,10 @@ function renderReports(){
       <div class="rpt-head" onclick="toggleReport(${i})">
         <div class="rpt-code">${escapeHTML(r.gameCode||'—')}</div>
         <div class="rpt-info">
-          <div class="rpt-winner">🏆 ${escapeHTML(r.winner||'—')} · ${r.winnerScore||0} pts</div>
+          <div class="rpt-winner">${r.winner&&r.winner!=='—'?`🏆 ${escapeHTML(r.winner)} · ${r.winnerScore||0} pts`:'🏆 No winner'}</div>
           <div class="rpt-date">${dateStr} at ${timeStr}</div>
           <div class="rpt-pills">
-            <span class="rpt-pill">👥 ${r.playerCount||0} players</span>
+            <span class="rpt-pill">👥 ${r.playerCount?r.playerCount+' students':'No students'}</span>
             <span class="rpt-pill">⏱ ${dur}</span>
             <span class="rpt-pill">📚 ${escapeHTML(r.bankName||'Custom')}</span>
           </div>
