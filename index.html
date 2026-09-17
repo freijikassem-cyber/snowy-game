@@ -2237,7 +2237,7 @@ async function initializeFirebase(){
 }
 function dbPath(path){const parts=path.split('/');if(parts[0]==='games')return 'sessions/'+parts[1]+'/'+(parts.length===2?'config':parts.slice(2).join('/'));if(parts[0]==='teachers'&&parts.length===2)return path+'/profile';return path;}
 function snapshotDoc(snap){return {id:snap.key,exists:snap.exists(),data:()=>snap.val()};}
-function snapshotCollection(snap){const docs=[];snap.forEach(child=>docs.push(snapshotDoc(child)));return {docs,size:docs.length};}
+function snapshotCollection(snap){const docs=[];snap.forEach(child=>{docs.push(snapshotDoc(child));});return {docs,size:docs.length};}
 function firebaseAdapter(database){
  function reference(path){return database.ref(dbPath(path));}
  return {doc(path){const ref=reference(path);return {
