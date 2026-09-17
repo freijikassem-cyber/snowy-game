@@ -1054,8 +1054,15 @@ async function endGame(){
 async function saveGameReport(endTime){
   if(!db||!teacherId||!gameCode)return;
   try{
-    const snap=await db.collection(`games/${gameCode}/players`).get();
-    const allPlayers=snap.docs.filter(d=>d.exists).map(d=>({id:d.id,...d.data()}));
+    // Use live in-memory players (most current - from real-time subscription)
+    const allPlayers=Object.entries(players).map(([id,p])=>({id,...p}));
+    // Merge with DB snapshot to catch any players the subscription may have missed
+    try{
+      const snap=await db.collection(`games/${gameCode}/players`).get();
+      snap.docs.filter(d=>d.exists).forEach(d=>{if(!allPlayers.find(p=>p.id===d.id))allPlayers.push({id:d.id,...d.data()});});
+    }catch(e){}
+    // Wait a moment so students can save their final answer logs
+    await new Promise(r=>setTimeout(r,3000));
     const answersSnap=await db.collection(`games/${gameCode}/answers`).get();
     const answers=answersSnap.docs.map(d=>({id:d.id,...d.data()}));
     const sorted=[...allPlayers].sort((a,b)=>(b.score||0)-(a.score||0));
@@ -1191,6 +1198,7 @@ function initStudentLobby(){
     snap.docs.forEach(d=>{if(d.exists)players[d.id]=d.data();});
     const el=document.getElementById('lplayers');
     if(el)el.innerHTML=Object.values(players).map(p=>`<div class="lchip"><div class="pdot" style="background:${safeColor(p.color)}"></div>${escapeHTML(p.name)}</div>`).join('');
+    updateNavPlayers();
   }));
   // Watch game doc for status changes
   unsubs.push(db.doc(`games/${gameCode}`).onSnapshot(snap=>{
@@ -1218,15 +1226,6 @@ function startStudentGame(){
   initCanvas();mouseX=cw/2+140;mouseY=ch/2;loadQ();render();
   gameActive=true;
   countdownDone=false;
-
-  // Subscribe to all players for positions & stats (DB is source of truth)
-  unsubs.push(db.collection(`games/${gameCode}/players`).onSnapshot(snap=>{
-    players={};snap.docs.forEach(d=>{
-      if(!d.exists||d.id===myPid)return;
-      players[d.id]={...(players[d.id]||{}),...d.data()};
-    });
-    updateNavPlayers();
-  }));
 
   // Room: real-time snowball events
   if(room){
@@ -2128,6 +2127,15 @@ function renderReports(){
         <td style="padding:5px 7px;text-align:right;color:#ff8c69">${p.knockouts||0}</td>
       </tr>`;
     }).join('');
+    let answerLogs=[];try{answerLogs=JSON.parse(r.answers||'[]');}catch(e){}
+    const answerSection=answerLogs.length?`<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;margin-bottom:6px">ANSWER LOGS</div>${answerLogs.map(rec=>{
+      let log=[];try{log=JSON.parse(rec.log||'[]');}catch(e){}
+      const correct=log.filter(a=>a.result==='correct').length;
+      const total=log.length;
+      const pct=total?Math.round(correct/total*100):0;
+      const logRows=log.map((a,ai)=>`<tr style="border-bottom:1px solid rgba(0,0,0,.06)"><td style="padding:3px 6px;color:var(--muted);font-size:10px">${ai+1}</td><td style="padding:3px 6px;font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(a.q||'')}</td><td style="padding:3px 6px;font-size:10px;color:${a.result==='correct'?'#3dd68c':'#f87171'}">${escapeHTML(a.selected||'—')}</td><td style="padding:3px 6px;font-size:10px;color:#6bcb77">${escapeHTML(a.correct||'—')}</td><td style="padding:3px 6px;font-size:10px;color:${a.result==='correct'?'#3dd68c':'#f87171'}">${a.result==='correct'?'✓':'✗'}</td></tr>`).join('');
+      return `<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-weight:700;font-size:12px">${escapeHTML(rec.name||'?')} <span style="color:var(--muted);font-weight:400">${escapeHTML(rec.myClass?'('+rec.myClass+')':'')}</span></span><span style="font-size:11px;color:${pct>=70?'#3dd68c':pct>=40?'#fbbf24':'#f87171'}">${correct}/${total} (${pct}%)</span></div>${total?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid rgba(0,0,0,.1)"><th style="padding:3px 6px;text-align:left;font-size:9px;color:var(--muted)">#</th><th style="padding:3px 6px;text-align:left;font-size:9px;color:var(--muted)">QUESTION</th><th style="padding:3px 6px;text-align:left;font-size:9px;color:var(--muted)">ANSWERED</th><th style="padding:3px 6px;text-align:left;font-size:9px;color:var(--muted)">CORRECT</th><th style="padding:3px 6px;text-align:left;font-size:9px;color:var(--muted)">RESULT</th></tr></thead><tbody>${logRows}</tbody></table></div>`:'<span style="color:var(--muted);font-size:11px">No answers recorded</span>'}</div>`;
+    }).join('')}</div>`:'';
     return `<div class="rpt-card" id="rpc${i}">
       <div class="rpt-head" onclick="toggleReport(${i})">
         <div class="rpt-code">${escapeHTML(r.gameCode||'—')}</div>
@@ -2158,6 +2166,7 @@ function renderReports(){
             <tbody>${rows}</tbody>
           </table>
         </div>
+        ${answerSection}
         <button class="btn btn-g" style="margin-top:10px;font-size:12px;padding:6px 14px" onclick="exportReportCSV(${i})">📥 Export CSV</button>
       </div>
     </div>`;
