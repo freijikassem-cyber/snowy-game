@@ -797,6 +797,7 @@ async function initTeacher(){
   unsubs.push(db.collection(`games/${gameCode}/players`).onSnapshot(snap=>{
     players={};
     snap.docs.forEach(d=>{if(d.exists)players[d.id]=d.data();});
+    console.log('[Snowy] teacher sees',snap.size,'player(s):',Object.keys(players));
     updateLobbyList();updateStartBtn();updateLiveLB();
   }));
   // Subscribe to game doc
@@ -1157,7 +1158,11 @@ async function joinGame(){
 
   const myClass=document.getElementById('jclass')?.value.trim()||'';
   gameCode=code;myName=name;me.myClass=myClass;
-  myPid=studentAuth.currentUser.uid;
+  // Use a stable per-tab random PID (not tied to Firebase Auth UID which can collide)
+  const pidKey='snowy_pid_'+code;
+  myPid=sessionStorage.getItem(pidKey)||('p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+  sessionStorage.setItem(pidKey,myPid);
+  console.log('[Snowy] joining as PID:',myPid,'code:',code);
 
   let existing;
   try{await activeDatabase.ref('sessions/'+code+'/members/'+myPid).set(true);}catch(e){toast('Could not join: '+e.message,5000);joinBtn.disabled=false;joinBtn.textContent='Join Game';return;}
