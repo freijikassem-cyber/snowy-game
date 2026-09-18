@@ -552,7 +552,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <footer class="creator-credit">Created by Mr. Kassem Freiji</footer>
 <div aria-live="polite" id="connection-status" role="status"></div>
 
-<div class="page" id="pbankeditor"><header class="bank-header"><button class="btn btn-g" onclick="closeBankEditor()">← Banks</button><h1 id="bedtitle">New Question Bank</h1><button class="btn btn-p" onclick="saveBankEditor()">Save Bank</button></header><main class="bank-content"><div class="field"><label class="lbl" for="bedname">Bank name</label><input class="inp" id="bedname" maxlength="120" placeholder="Name your question bank"/></div><div class="field"><label class="lbl" for="bedgrade">Class or grade</label><input class="inp" id="bedgrade" maxlength="60" placeholder="Class or grade"/></div><div class="bank-tools"><h2>Questions <span id="bedqcount">(0)</span></h2><button class="btn btn-g" onclick="openQEditorForBank(-1)">+ Add Question</button></div><p class="muted">Write each question, add four answers, and select the correct answer.</p><div id="bedqlist"></div></main></div>
+<div class="page" id="pbankeditor"><header class="bank-header"><button class="btn btn-g" onclick="closeBankEditor()">← Banks</button><h1 id="bedtitle">New Question Bank</h1><button class="btn btn-p" onclick="saveBankEditor()">Save Bank</button></header><main class="bank-content"><div class="field"><label class="lbl" for="bedname">Bank name</label><input class="inp" id="bedname" maxlength="120" placeholder="Name your question bank"/></div><div class="field"><label class="lbl" for="bedgrade">Class or grade</label><input class="inp" id="bedgrade" maxlength="60" placeholder="Class or grade"/></div><div class="bank-tools"><h2>Questions <span id="bedqcount">(0)</span></h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g" onclick="triggerBankUpload()" style="font-size:12px;padding:5px 12px">⬆ Upload JSON</button><button class="btn btn-g" onclick="downloadBankJSON()" style="font-size:12px;padding:5px 12px">⬇ Download JSON</button><button class="btn btn-g" onclick="openQEditorForBank(-1)">+ Add Question</button></div></div><p class="muted">Add questions manually, or upload a JSON file. <a href="#" onclick="downloadSampleJSON();return false;" style="color:var(--ice);font-size:12px">Download sample format</a></p><input accept=".json" id="bank-upload-input" onchange="handleBankUpload(event)" style="display:none" type="file"/><div id="bedqlist"></div></main></div>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
@@ -946,6 +946,51 @@ function openBankEditor(id=null){
 
 function closeBankEditor(){editingBankId=null;bankEditorQ=[];qEditorTarget='game';showPage('pt');ttab('banks');}
 
+function _bankQsToExport(qs){return qs.map(q=>({question:q.q,options:q.o,answer:q.o[q.a]}));}
+function _triggerDownload(filename,data){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);
+}
+function downloadBankJSON(){
+  if(!bankEditorQ.length)return toast('No questions to download yet.');
+  const name=(document.getElementById('bedname').value.trim()||'bank').replace(/[^a-zA-Z0-9]/g,'_');
+  _triggerDownload(name+'_questions.json',_bankQsToExport(bankEditorQ));
+}
+function downloadBankById(id){
+  const bank=questionBanks.find(b=>b.id===id);if(!bank)return toast('Bank not found.');
+  if(!bank.questions.length)return toast('This bank is empty.');
+  _triggerDownload((bank.name||'bank').replace(/[^a-zA-Z0-9]/g,'_')+'_questions.json',_bankQsToExport(bank.questions));
+}
+function downloadSampleJSON(){
+  _triggerDownload('snowy_sample_questions.json',[
+    {question:'What is the capital of France?',options:['Berlin','Madrid','Paris','Rome'],answer:'Paris'},
+    {question:'What is 7 × 8?',options:['54','56','58','64'],answer:'56'}
+  ]);
+}
+function triggerBankUpload(){document.getElementById('bank-upload-input').click();}
+function handleBankUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const raw=JSON.parse(ev.target.result);
+      if(!Array.isArray(raw))return toast('Invalid format — file must contain a JSON array.');
+      let added=0,skipped=0;
+      for(const item of raw){
+        const q=item.question||item.q;
+        const o=item.options||item.o;
+        const ansText=item.answer;
+        let a=typeof item.a==='number'?item.a:(Array.isArray(o)?o.indexOf(ansText):-1);
+        if(!q||!Array.isArray(o)||o.length!==4||a<0||a>3){skipped++;continue;}
+        bankEditorQ.push({q:String(q).trim(),o:o.map(x=>String(x).trim()),a});added++;
+      }
+      renderBedQList();
+      toast(added+' question'+(added!==1?'s':'')+' imported'+(skipped?', '+skipped+' skipped (invalid format).':'.'));
+    }catch(err){toast('Could not read file: '+err.message,5000);}
+  };
+  reader.readAsText(file);e.target.value='';
+}
+
 async function saveBankEditor(){
  const name=document.getElementById('bedname').value.trim(),grade=document.getElementById('bedgrade').value.trim();
  if(!name)return toast('Give the bank a name.');if(!bankEditorQ.length)return toast('Add at least one question before saving.');
@@ -983,6 +1028,7 @@ function renderBanks(){
         <span class="bgrade">${escapeHTML(b.grade||'')}</span>
         <div class="bcard-btns">
           <button class="btn btn-g" style="font-size:11px;padding:4px 10px" onclick="openBankEditor('${b.id}')">✏️ Edit</button>
+          <button class="btn btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadBankById('${b.id}')">⬇ Export</button>
           <button class="btn" style="font-size:11px;padding:4px 10px;background:rgba(255,61,90,.18);border-color:var(--danger);color:var(--danger)" onclick="deleteBankFromDB('${b.id}')">🗑</button>
         </div>
       </div>
