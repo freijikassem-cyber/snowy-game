@@ -265,25 +265,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 /* Keep join/home pages scrollable */
 #pj,#ph,#pl,#pe,#pauth,#pbankeditor{touch-action:auto}
 
-/* Virtual joystick */
-.vjoy-wrap{position:absolute;bottom:100px;left:14px;z-index:70;touch-action:none;display:none}
-@media(hover:none)and(pointer:coarse){.vjoy-wrap{display:block}}
-.vjoy-base{width:100px;height:100px;border-radius:50%;background:rgba(8,16,31,.45);border:2.5px solid rgba(255,255,255,.4);position:relative;user-select:none}
-.vjoy-thumb{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.6);border:2px solid rgba(255,255,255,.9);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+/* Virtual joystick — always in DOM, shown by JS on touch devices */
+.vjoy-wrap{position:absolute;bottom:100px;left:14px;z-index:75;display:none;touch-action:none;-webkit-user-select:none;user-select:none}
+.vjoy-base{width:110px;height:110px;border-radius:50%;background:rgba(8,16,31,.5);border:3px solid rgba(255,255,255,.45);position:relative;touch-action:none;cursor:grab}
+.vjoy-thumb{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.65);border:2.5px solid rgba(255,255,255,.95);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;will-change:transform}
 
 /* Vend buy button (touch) */
-.vbuy-btn{position:absolute;bottom:210px;left:14px;background:#4a70d8;border:2px solid rgba(255,255,255,.4);color:#fff;font-family:var(--fd);font-size:14px;padding:9px 16px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:68;display:none;white-space:nowrap;touch-action:manipulation}
+.vbuy-btn{position:absolute;bottom:220px;left:14px;background:#4a70d8;border:2px solid rgba(255,255,255,.4);color:#fff;font-family:var(--fd);font-size:14px;padding:9px 16px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:68;display:none;white-space:nowrap;touch-action:manipulation}
 
 /* Bigger touch targets for battle slots on mobile */
-@media(hover:none)and(pointer:coarse){
+@media(max-width:768px){
   .battle-slot{min-width:76px;height:72px;touch-action:manipulation}
   .battle-actions{gap:8px;bottom:8px}
   .slot-symbol{font-size:26px}
-  /* No-ammo banner: move up to clear battle slots */
   #noammo{bottom:96px}
-  /* Vend hint: hide keyboard hint, show button instead */
   .vhint{display:none!important}
-  /* Hide fullscreen button – replaced by LB toggle */
   .gnav-fs{display:none}
 }
 
@@ -1414,24 +1410,21 @@ function initCanvas(){
   const wrap=cv.parentElement;
   function rsz(){cv.width=wrap.clientWidth;cv.height=wrap.clientHeight;cw=cv.width;ch=cv.height;scl=Math.max(.72,Math.min(1.25,cw/1120));const dpr=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.getContext("2d").setTransform(dpr,0,0,dpr,0,0);}
   rsz();new ResizeObserver(rsz).observe(wrap);
-  cv.addEventListener('mousedown',onCanvasClick);
-  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();mouseX=e.clientX-r.left;mouseY=e.clientY-r.top;});
-  // Touch events for mobile aiming + throwing
-  cv.addEventListener('touchstart',e=>{
-    e.preventDefault();
+  // Unified pointer events handle both mouse (desktop) and touch (mobile)
+  cv.addEventListener('pointerdown',e=>{
+    if(e.isPrimary===false)return; // ignore extra fingers; joystick uses its own pointer
     const r=cv.getBoundingClientRect();
-    for(const t of e.changedTouches){mouseX=t.clientX-r.left;mouseY=t.clientY-r.top;}
-    onCanvasClick({clientX:e.changedTouches[0].clientX,clientY:e.changedTouches[0].clientY});
-  },{passive:false});
-  cv.addEventListener('touchmove',e=>{
-    e.preventDefault();
+    mouseX=e.clientX-r.left;mouseY=e.clientY-r.top;
+    onCanvasClick(e);
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(e.isPrimary===false)return;
     const r=cv.getBoundingClientRect();
-    const t=e.touches[e.touches.length-1];
-    mouseX=t.clientX-r.left;mouseY=t.clientY-r.top;
-  },{passive:false});
-  // Show LB button on touch devices
+    mouseX=e.clientX-r.left;mouseY=e.clientY-r.top;
+  });
+  // Show LB button on touch/mobile devices
   const lbBtn=document.getElementById('gnav-lb-btn');
-  if(lbBtn&&('ontouchstart' in window))lbBtn.style.display='flex';
+  if(lbBtn&&(('ontouchstart' in window)||navigator.maxTouchPoints>0))lbBtn.style.display='flex';
   document.addEventListener('keydown',e=>{
     keys[e.key.toLowerCase()]=true;
     if(!gameActive)return;
@@ -1455,40 +1448,46 @@ function w2s(wx,wy){return{x:(wx-camX)*scl+cw/2,y:(wy-camY)*scl+ch/2};}
 function s2w(sx,sy){return{x:(sx-cw/2)/scl+camX,y:(sy-ch/2)/scl+camY};}
 
 // ─── VIRTUAL JOYSTICK ──────────────────────────────────────
-let vjoyActive=false,vjoyId=null,vjoyBX=0,vjoyBY=0;
+let _joyPid=null,_joyBX=0,_joyBY=0;
 function initJoystick(){
+  const wrap=document.getElementById('vjoy-wrap');
   const base=document.getElementById('vjoy-base');
   const thumb=document.getElementById('vjoy-thumb');
-  if(!base)return;
-  const R=40;
-  base.addEventListener('touchstart',e=>{
-    e.stopPropagation();
-    const t=e.changedTouches[0];
-    vjoyActive=true;vjoyId=t.identifier;
+  if(!base||!wrap)return;
+  // Show joystick only on real touch devices
+  const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+  if(isTouch)wrap.style.display='block';
+  const R=44;
+
+  base.addEventListener('pointerdown',e=>{
+    if(_joyPid!==null)return;
+    e.preventDefault();e.stopPropagation();
+    _joyPid=e.pointerId;
+    try{base.setPointerCapture(e.pointerId);}catch(ex){}
     const br=base.getBoundingClientRect();
-    vjoyBX=br.left+br.width/2;vjoyBY=br.top+br.height/2;
-  },{passive:true});
-  document.addEventListener('touchmove',e=>{
-    if(!vjoyActive)return;
-    for(const t of e.changedTouches){
-      if(t.identifier!==vjoyId)continue;
-      let dx=t.clientX-vjoyBX,dy=t.clientY-vjoyBY;
-      const dist=Math.hypot(dx,dy);
-      if(dist>R){dx=dx/dist*R;dy=dy/dist*R;}
-      if(thumb)thumb.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
-      const dz=12;
-      keys['w']=dy<-dz;keys['s']=dy>dz;keys['a']=dx<-dz;keys['d']=dx>dz;
-    }
-  },{passive:true});
-  document.addEventListener('touchend',e=>{
-    if(!vjoyActive)return;
-    for(const t of e.changedTouches){
-      if(t.identifier!==vjoyId)continue;
-      vjoyActive=false;
-      if(thumb)thumb.style.transform='translate(-50%,-50%)';
-      keys['w']=keys['s']=keys['a']=keys['d']=false;
-    }
-  },{passive:true});
+    _joyBX=br.left+br.width/2;_joyBY=br.top+br.height/2;
+  });
+
+  base.addEventListener('pointermove',e=>{
+    if(e.pointerId!==_joyPid)return;
+    e.preventDefault();
+    let dx=e.clientX-_joyBX,dy=e.clientY-_joyBY;
+    const dist=Math.hypot(dx,dy);
+    if(dist>R){dx=dx/dist*R;dy=dy/dist*R;}
+    if(thumb)thumb.style.transform=`translate(calc(-50% + ${Math.round(dx)}px),calc(-50% + ${Math.round(dy)}px))`;
+    const dz=10;
+    keys['w']=dy<-dz;keys['s']=dy>dz;keys['a']=dx<-dz;keys['d']=dx>dz;
+  });
+
+  function _endJoy(e){
+    if(e.pointerId!==_joyPid)return;
+    _joyPid=null;
+    if(thumb)thumb.style.transform='translate(-50%,-50%)';
+    keys['w']=keys['s']=keys['a']=keys['d']=false;
+  }
+  base.addEventListener('pointerup',_endJoy);
+  base.addEventListener('pointercancel',_endJoy);
+  base.addEventListener('lostpointercapture',_endJoy);
 }
 
 function toggleMobileLB(){
