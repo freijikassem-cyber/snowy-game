@@ -258,6 +258,62 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .gnav .hudtimer{color:#fff}.gnav .hudtimer.urg{color:#ffb6b6}#mystatscard [style*="color:#ffcc00"],#elb [style*="color:#ffcc00"],#rptlist [style*="color:#ffcc00"],#livelbrbody [style*="color:#ffcc00"]{color:#9a6b06!important}#mystatscard [style*="color:#7de8ff"]{color:#247aab!important}
 
 .qovl-box{max-height:94dvh;overflow-y:auto}.qovl-q{overflow-wrap:anywhere;min-width:0}.qovl-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.qmb:focus-visible,.battle-slot:focus-visible{outline:4px solid #fff;outline-offset:-7px}
+
+/* ── MOBILE / TABLET IMPROVEMENTS ── */
+/* Prevent rubber-band scroll on game page */
+#pg,.gcwrap{touch-action:none}
+/* Keep join/home pages scrollable */
+#pj,#ph,#pl,#pe,#pauth,#pbankeditor{touch-action:auto}
+
+/* Virtual joystick */
+.vjoy-wrap{position:absolute;bottom:100px;left:14px;z-index:70;touch-action:none;display:none}
+@media(hover:none)and(pointer:coarse){.vjoy-wrap{display:block}}
+.vjoy-base{width:100px;height:100px;border-radius:50%;background:rgba(8,16,31,.45);border:2.5px solid rgba(255,255,255,.4);position:relative;user-select:none}
+.vjoy-thumb{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.6);border:2px solid rgba(255,255,255,.9);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+
+/* Vend buy button (touch) */
+.vbuy-btn{position:absolute;bottom:210px;left:14px;background:#4a70d8;border:2px solid rgba(255,255,255,.4);color:#fff;font-family:var(--fd);font-size:14px;padding:9px 16px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:68;display:none;white-space:nowrap;touch-action:manipulation}
+
+/* Bigger touch targets for battle slots on mobile */
+@media(hover:none)and(pointer:coarse){
+  .battle-slot{min-width:76px;height:72px;touch-action:manipulation}
+  .battle-actions{gap:8px;bottom:8px}
+  .slot-symbol{font-size:26px}
+  /* No-ammo banner: move up to clear battle slots */
+  #noammo{bottom:96px}
+  /* Vend hint: hide keyboard hint, show button instead */
+  .vhint{display:none!important}
+  /* Hide fullscreen button – replaced by LB toggle */
+  .gnav-fs{display:none}
+}
+
+/* Mobile teacher panel: sidebar → compact top tab bar */
+@media(max-width:600px){
+  #pt{flex-direction:column;overflow:hidden}
+  .tsb{width:100%!important;min-width:unset!important;height:auto;flex-direction:row;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0;overflow:visible}
+  .th{display:none}
+  .teacher-profile{padding:6px 10px}
+  .tp-email{display:none}
+  #tslb{display:none}
+  #tsb-exit{display:none}
+  .tnav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:5px 8px;gap:3px;flex:1;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .tnav::-webkit-scrollbar{display:none}
+  .nb{white-space:nowrap;font-size:12px;padding:7px 9px}
+  .tnav>.btn-p{white-space:nowrap;font-size:12px;padding:7px 12px;flex-shrink:0}
+  .tm{flex:1;overflow-y:auto;padding:10px 10px 16px}
+  #mob-exit-btn{display:block}
+}
+@media(min-width:601px)and(max-width:900px){
+  .tsb{width:185px!important;min-width:185px!important}
+}
+
+/* Mobile student lobby: smaller game code */
+@media(max-width:480px){
+  .lcode{font-size:clamp(38px,13vw,68px);letter-spacing:clamp(4px,2vw,12px)}
+  .jbox{padding:22px 16px}
+  .hcards{flex-direction:column;gap:14px}
+  .rcard{width:min(280px,84vw)}
+}
 </style>
 <!-- HOME -->
 <div class="page active" id="ph">
@@ -332,7 +388,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <button class="nb" id="tareports" onclick="ttab('reports')">📊 Reports</button>
 <button class="btn btn-p" onclick="newGameSession()">+ New Game</button></div>
 <div id="tslb" style="flex:1;overflow-y:auto;padding:10px 12px"></div>
-<div style="padding:14px;border-top:1px solid var(--border)"><button class="btn btn-g" onclick="showPage('ph')" style="width:100%">← Exit</button></div>
+<div id="tsb-exit" style="padding:14px;border-top:1px solid var(--border)"><button class="btn btn-g" onclick="showPage('ph')" style="width:100%">← Exit</button></div>
 </div>
 <div class="tm">
 <div id="ttsetup" style="display:flex;flex-direction:column;gap:16px">
@@ -425,6 +481,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 </div>
 </div>
 </div>
+<!-- Mobile exit button (sidebar exit is hidden on mobile) -->
+<div id="mob-exit-btn" style="display:none;padding:10px 0 4px"><button class="btn btn-g" onclick="showPage('ph')" style="width:100%;font-size:13px">← Exit Dashboard</button></div>
 </div>
 <!-- Question editor modal — lives at body level so it works on ANY tab -->
 <div id="qeditor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:900;align-items:center;justify-content:center">
@@ -464,7 +522,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <div class="gnav-r">
 <div class="gnav-snowcount">🎯 <span id="nav-balls">0</span></div>
 <div class="hudtimer" id="hudtimer">5:00</div>
-<button onclick="toggleFS()" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center" title="Fullscreen">⛶</button>
+<button class="gnav-fs" onclick="toggleFS()" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center" title="Fullscreen">⛶</button>
+<button id="gnav-lb-btn" onclick="toggleMobileLB()" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:15px;display:none;align-items:center;justify-content:center;touch-action:manipulation" title="Leaderboard">🏆</button>
 </div>
 </div>
 <!-- Full canvas area -->
@@ -493,6 +552,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <div class="kfeed" id="kfeed"></div>
 <!-- Vend hint -->
 <div class="vhint" id="vhint"></div>
+<!-- Virtual joystick (shown on touch devices) -->
+<div class="vjoy-wrap" id="vjoy-wrap">
+  <div class="vjoy-base" id="vjoy-base">
+    <div class="vjoy-thumb" id="vjoy-thumb"></div>
+  </div>
+</div>
+<!-- Vend buy button (touch only) -->
+<button class="vbuy-btn" id="vbuy-btn" onclick="tryBuy()">🛒 Buy</button>
 </div>
 <!-- Countdown overlay -->
 <div id="cdovl" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px">
@@ -507,7 +574,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 </div>
 <!-- Out-of-ammo prompt -->
 <div id="noammo" style="display:none;position:absolute;bottom:70px;left:50%;transform:translateX(-50%);background:#b03030;border:2px solid #ff6b6b;color:#fff;font-family:Fredoka One,cursive;font-size:16px;padding:10px 22px;border-radius:11px;z-index:80;text-align:center;pointer-events:none;box-shadow:0 4px 20px rgba(255,0,0,.4)">
-    ❄️ No snowballs! Press Q to answer a question
+    ❄️ No snowballs! Tap <b>?</b> to answer
   </div>
 <!-- 1-minute warning -->
 <div id="warnbanner" style="display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);background:#b06010;border:2px solid #ff9f1c;color:#fff;font-family:Fredoka One,cursive;font-size:18px;padding:12px 28px;border-radius:12px;z-index:90;text-align:center;box-shadow:0 4px 20px rgba(255,159,28,.4)">
@@ -1296,7 +1363,7 @@ function startStudentGame(){
   const ncode=document.getElementById('nav-code');if(ncode)ncode.textContent=gameCode;
   camX=me.x;camY=me.y;
 
-  initCanvas();mouseX=cw/2+140;mouseY=ch/2;loadQ();render();
+  initCanvas();initJoystick();mouseX=cw/2+140;mouseY=ch/2;loadQ();render();
   gameActive=true;
   countdownDone=false;
 
@@ -1329,6 +1396,22 @@ function initCanvas(){
   rsz();new ResizeObserver(rsz).observe(wrap);
   cv.addEventListener('mousedown',onCanvasClick);
   cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();mouseX=e.clientX-r.left;mouseY=e.clientY-r.top;});
+  // Touch events for mobile aiming + throwing
+  cv.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect();
+    for(const t of e.changedTouches){mouseX=t.clientX-r.left;mouseY=t.clientY-r.top;}
+    onCanvasClick({clientX:e.changedTouches[0].clientX,clientY:e.changedTouches[0].clientY});
+  },{passive:false});
+  cv.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect();
+    const t=e.touches[e.touches.length-1];
+    mouseX=t.clientX-r.left;mouseY=t.clientY-r.top;
+  },{passive:false});
+  // Show LB button on touch devices
+  const lbBtn=document.getElementById('gnav-lb-btn');
+  if(lbBtn&&('ontouchstart' in window))lbBtn.style.display='flex';
   document.addEventListener('keydown',e=>{
     keys[e.key.toLowerCase()]=true;
     if(!gameActive)return;
@@ -1350,6 +1433,50 @@ function initCanvas(){
 
 function w2s(wx,wy){return{x:(wx-camX)*scl+cw/2,y:(wy-camY)*scl+ch/2};}
 function s2w(sx,sy){return{x:(sx-cw/2)/scl+camX,y:(sy-ch/2)/scl+camY};}
+
+// ─── VIRTUAL JOYSTICK ──────────────────────────────────────
+let vjoyActive=false,vjoyId=null,vjoyBX=0,vjoyBY=0;
+function initJoystick(){
+  const base=document.getElementById('vjoy-base');
+  const thumb=document.getElementById('vjoy-thumb');
+  if(!base)return;
+  const R=40;
+  base.addEventListener('touchstart',e=>{
+    e.stopPropagation();
+    const t=e.changedTouches[0];
+    vjoyActive=true;vjoyId=t.identifier;
+    const br=base.getBoundingClientRect();
+    vjoyBX=br.left+br.width/2;vjoyBY=br.top+br.height/2;
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!vjoyActive)return;
+    for(const t of e.changedTouches){
+      if(t.identifier!==vjoyId)continue;
+      let dx=t.clientX-vjoyBX,dy=t.clientY-vjoyBY;
+      const dist=Math.hypot(dx,dy);
+      if(dist>R){dx=dx/dist*R;dy=dy/dist*R;}
+      if(thumb)thumb.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+      const dz=12;
+      keys['w']=dy<-dz;keys['s']=dy>dz;keys['a']=dx<-dz;keys['d']=dx>dz;
+    }
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(!vjoyActive)return;
+    for(const t of e.changedTouches){
+      if(t.identifier!==vjoyId)continue;
+      vjoyActive=false;
+      if(thumb)thumb.style.transform='translate(-50%,-50%)';
+      keys['w']=keys['s']=keys['a']=keys['d']=false;
+    }
+  },{passive:true});
+}
+
+function toggleMobileLB(){
+  const tl=document.getElementById('tabler');
+  if(!tl)return;
+  if(tl.style.display==='none'||!tl.style.display){updateTabLB();tl.style.display='flex';tl.style.flexDirection='column';}
+  else tl.style.display='none';
+}
 
 // ─── GAME LOOP ─────────────────────────────────────────────
 function gameLoop(now){
@@ -1403,14 +1530,17 @@ function hitWall(x,y,r){for(const w of WALLS){if(x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&
 
 function checkVend(){
   const hint=document.getElementById('vhint');
+  const vbuy=document.getElementById('vbuy-btn');
   for(const v of VEND){
     const cx=v.x+v.w/2,cy=v.y+v.h/2;
     if(Math.hypot(me.x-cx,me.y-cy)<90){
       if(hint){hint.style.display='block';hint.textContent=v.type==='shield'?'[E] Buy 🛡 Shield Can ($50)':'[E] Buy 💊 Med Pack ($100)';}
+      if(vbuy){vbuy.style.display='block';vbuy.textContent=v.type==='shield'?'🛡 Buy Shield ($50)':'💊 Buy Med ($100)';}
       return;
     }
   }
   if(hint)hint.style.display='none';
+  if(vbuy)vbuy.style.display='none';
 }
 
 function tryBuy(){
